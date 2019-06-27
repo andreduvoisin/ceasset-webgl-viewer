@@ -5,7 +5,8 @@
   "dependencies": {
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
-    "react-scripts": "3.0.1"
+    "react-scripts": "3.0.1",
+    "three": "^0.106.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -29,6 +30,8 @@
     ]
   },
   "devDependencies": {
-    "prettier": "^1.18.2"
+    "@types/react": "^16.8.22",
+    "prettier": "^1.18.2",
+    "typescript": "^3.5.2"
   }
 }
