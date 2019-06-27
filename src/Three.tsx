@@ -19,8 +19,8 @@ class Three extends React.Component {
   }
 
   componentDidMount(): void {
-    this.onResize();
-    window.addEventListener("resize", this.onResize.bind(this));
+    this.onWindowResize();
+    window.addEventListener("resize", this.onWindowResize.bind(this));
 
     this.scene.add(this.cube);
 
@@ -42,7 +42,7 @@ class Three extends React.Component {
     this.cube.rotation.y += 0.01;
   }
 
-  onResize() {
+  onWindowResize() {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
 
     this.camera = new THREE.PerspectiveCamera(
