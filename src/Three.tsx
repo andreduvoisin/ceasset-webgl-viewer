@@ -333,7 +333,7 @@ class Three extends React.Component {
           // texture.magFilter = THREE.LinearFilter;
           texture.needsUpdate = true;
 
-          // this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+          // this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red material.
           this.material = new THREE.MeshBasicMaterial({ map: texture });
 
           break;
