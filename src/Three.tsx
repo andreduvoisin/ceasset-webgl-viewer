@@ -7,23 +7,27 @@ class Three extends React.Component {
 
   camera: THREE.Camera = new THREE.Camera();
   // cube: THREE.Mesh;
+  geometry: THREE.Geometry = new THREE.Geometry();
   mesh: THREE.Mesh = new THREE.Mesh();
+  material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial();
 
   mount: any; // TODO: What is this? How do you strongly type it?
 
-  constructor(props: any) {
-    super(props);
-
-    // const geometry = new THREE.BoxGeometry(1, 1, 1);
-    // const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    // this.cube = new THREE.Mesh(geometry, material);
-  }
+  // constructor(props: any) {
+  //   super(props);
+  //
+  //   // const geometry = new THREE.BoxGeometry(1, 1, 1);
+  //   // const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+  //   // this.cube = new THREE.Mesh(geometry, material);
+  // }
 
   async componentDidMount() {
     this.onWindowResize();
     window.addEventListener("resize", this.onWindowResize.bind(this));
 
     await this.readFile();
+
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
 
     this.scene.add(this.mesh);
 
@@ -85,41 +89,34 @@ class Three extends React.Component {
         case 1: // mesh
           console.log("mesh");
 
-          const geometry = new THREE.BufferGeometry();
-
           // unsigned verticesCount;
           const verticesCount = dataView.getUint32(byteOffset, littleEndian);
           byteOffset += 4;
 
           // std::vector<Vertex1P1UV4J> m_vertices;
-          const verticesCoordinates = new Float32Array(verticesCount * 3);
+          const uvs: THREE.Vector2[] = [];
           for (
             let vertexIndex = 0;
             vertexIndex < verticesCount;
             ++vertexIndex
           ) {
             // glm::vec3 position;
-            verticesCoordinates[vertexIndex * 3] = dataView.getFloat32(
-              byteOffset,
-              littleEndian
-            );
+            const x = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
-            verticesCoordinates[vertexIndex * 3 + 1] = dataView.getFloat32(
-              byteOffset,
-              littleEndian
-            );
+            const y = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
-            verticesCoordinates[vertexIndex * 3 + 2] = dataView.getFloat32(
-              byteOffset,
-              littleEndian
-            );
+            const z = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
 
+            this.geometry.vertices.push(new THREE.Vector3(x, y, z));
+
             // float uv[2];
-            dataView.getFloat32(byteOffset, littleEndian);
+            const u = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
-            dataView.getFloat32(byteOffset, littleEndian);
+            const v = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
+
+            uvs.push(new THREE.Vector2(u, v));
 
             // uint8_t jointIndices[4];
             dataView.getInt8(byteOffset);
@@ -139,26 +136,29 @@ class Three extends React.Component {
             dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
           }
+          this.geometry.verticesNeedUpdate = true;
 
-          geometry.addAttribute(
-            "position",
-            new THREE.BufferAttribute(verticesCoordinates, 3)
-          );
-          const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+          // for (let i = 0; i < uvs.length; i += 3) {}
+          // console.log(this.geometry.faceVertexUvs);
 
           // unsigned indicesCount;
           const indicesCount = dataView.getUint32(byteOffset, littleEndian);
           byteOffset += 4;
 
-          let indices: number[] = [];
-
           // std::vector<unsigned int> m_indices;
-          for (let indexIndex = 0; indexIndex < indicesCount; ++indexIndex) {
-            indices.push(dataView.getUint32(byteOffset, littleEndian));
+          for (let indexIndex = 0; indexIndex < indicesCount; indexIndex += 3) {
+            const a = dataView.getUint32(byteOffset, littleEndian);
             byteOffset += 4;
-          }
+            const b = dataView.getUint32(byteOffset, littleEndian);
+            byteOffset += 4;
+            const c = dataView.getUint32(byteOffset, littleEndian);
+            byteOffset += 4;
 
-          geometry.setIndex(indices);
+            this.geometry.faces.push(new THREE.Face3(a, b, c));
+            this.geometry.faceVertexUvs[0].push([uvs[a], uvs[b], uvs[c]]);
+          }
+          this.geometry.elementsNeedUpdate = true;
+          this.geometry.uvsNeedUpdate = true;
 
           // std::string m_diffuseMapName;
           char = dataView.getInt8(byteOffset);
@@ -195,8 +195,6 @@ class Three extends React.Component {
           // uint8_t m_normalIndex;
           dataView.getInt8(byteOffset);
           ++byteOffset;
-
-          this.mesh = new THREE.Mesh(geometry, material);
 
           break;
 
@@ -304,6 +302,7 @@ class Three extends React.Component {
 
         case 3: // texture
           console.log("texture");
+
           // int width;
           const width = dataView.getInt32(byteOffset, littleEndian);
           byteOffset += 4;
@@ -316,10 +315,27 @@ class Three extends React.Component {
 
           // std::vector<std::byte> data;
           const size = width * height * channels;
+          const data = new Uint8Array(size);
           for (let i = 0; i < size; ++i) {
-            dataView.getInt8(byteOffset);
+            data[i] = dataView.getUint8(byteOffset);
             ++byteOffset;
           }
+
+          const texture = new THREE.DataTexture(
+            data,
+            width,
+            height,
+            channels === 3 ? THREE.RGBFormat : THREE.RGBAFormat
+          );
+          // texture.wrapS = THREE.RepeatWrapping;
+          // texture.wrapT = THREE.RepeatWrapping;
+          // texture.minFilter = THREE.LinearMipMapLinearFilter; // TODO: This filter breaks WebGL.
+          // texture.magFilter = THREE.LinearFilter;
+          texture.needsUpdate = true;
+
+          // this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+          this.material = new THREE.MeshBasicMaterial({ map: texture });
+
           break;
       }
     }
