@@ -6,25 +6,26 @@ class Three extends React.Component {
   renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer();
 
   camera: THREE.Camera = new THREE.Camera();
-  cube: THREE.Mesh;
+  // cube: THREE.Mesh;
+  mesh: THREE.Mesh = new THREE.Mesh();
 
   mount: any; // TODO: What is this? How do you strongly type it?
 
   constructor(props: any) {
     super(props);
 
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    this.cube = new THREE.Mesh(geometry, material);
+    // const geometry = new THREE.BoxGeometry(1, 1, 1);
+    // const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    // this.cube = new THREE.Mesh(geometry, material);
   }
 
   async componentDidMount() {
     this.onWindowResize();
     window.addEventListener("resize", this.onWindowResize.bind(this));
 
-    this.scene.add(this.cube);
-
     await this.readFile();
+
+    this.scene.add(this.mesh);
 
     this.mount.appendChild(this.renderer.domElement);
 
@@ -83,22 +84,35 @@ class Three extends React.Component {
 
         case 1: // mesh
           console.log("mesh");
+
+          const geometry = new THREE.BufferGeometry();
+
           // unsigned verticesCount;
           const verticesCount = dataView.getUint32(byteOffset, littleEndian);
           byteOffset += 4;
 
           // std::vector<Vertex1P1UV4J> m_vertices;
+          const verticesCoordinates = new Float32Array(verticesCount * 3);
           for (
             let vertexIndex = 0;
             vertexIndex < verticesCount;
             ++vertexIndex
           ) {
             // glm::vec3 position;
-            dataView.getFloat32(byteOffset, littleEndian);
+            verticesCoordinates[vertexIndex * 3] = dataView.getFloat32(
+              byteOffset,
+              littleEndian
+            );
             byteOffset += 4;
-            dataView.getFloat32(byteOffset, littleEndian);
+            verticesCoordinates[vertexIndex * 3 + 1] = dataView.getFloat32(
+              byteOffset,
+              littleEndian
+            );
             byteOffset += 4;
-            dataView.getFloat32(byteOffset, littleEndian);
+            verticesCoordinates[vertexIndex * 3 + 2] = dataView.getFloat32(
+              byteOffset,
+              littleEndian
+            );
             byteOffset += 4;
 
             // float uv[2];
@@ -126,15 +140,25 @@ class Three extends React.Component {
             byteOffset += 4;
           }
 
+          geometry.addAttribute(
+            "position",
+            new THREE.BufferAttribute(verticesCoordinates, 3)
+          );
+          const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
           // unsigned indicesCount;
           const indicesCount = dataView.getUint32(byteOffset, littleEndian);
           byteOffset += 4;
 
+          let indices: number[] = [];
+
           // std::vector<unsigned int> m_indices;
           for (let indexIndex = 0; indexIndex < indicesCount; ++indexIndex) {
-            dataView.getUint32(byteOffset, littleEndian);
+            indices.push(dataView.getUint32(byteOffset, littleEndian));
             byteOffset += 4;
           }
+
+          geometry.setIndex(indices);
 
           // std::string m_diffuseMapName;
           char = dataView.getInt8(byteOffset);
@@ -171,6 +195,8 @@ class Three extends React.Component {
           // uint8_t m_normalIndex;
           dataView.getInt8(byteOffset);
           ++byteOffset;
+
+          this.mesh = new THREE.Mesh(geometry, material);
 
           break;
 
@@ -315,15 +341,15 @@ class Three extends React.Component {
   animate() {
     requestAnimationFrame(this.animate.bind(this));
 
-    this.rotateCube();
+    // this.rotateCube();
 
     this.renderer.render(this.scene, this.camera);
   }
 
-  rotateCube() {
-    this.cube.rotation.x += 0.01;
-    this.cube.rotation.y += 0.01;
-  }
+  // rotateCube() {
+  //   this.cube.rotation.x += 0.01;
+  //   this.cube.rotation.y += 0.01;
+  // }
 
   onWindowResize() {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -334,7 +360,10 @@ class Three extends React.Component {
       0.1,
       1000
     );
-    this.camera.position.z = 5;
+
+    this.camera.position.x = 0;
+    this.camera.position.y = 100;
+    this.camera.position.z = 700;
   }
 
   render() {
