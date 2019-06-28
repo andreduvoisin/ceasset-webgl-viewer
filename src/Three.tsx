@@ -8,8 +8,9 @@ class Three extends React.Component {
   camera: THREE.Camera = new THREE.Camera();
   // cube: THREE.Mesh;
   geometry: THREE.Geometry = new THREE.Geometry();
-  mesh: THREE.Mesh = new THREE.Mesh();
+  mesh: THREE.SkinnedMesh = new THREE.SkinnedMesh();
   material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial();
+  skeleton: THREE.Skeleton = new THREE.Skeleton([]);
 
   mount: any; // TODO: What is this? How do you strongly type it?
 
@@ -27,7 +28,11 @@ class Three extends React.Component {
 
     await this.readFile();
 
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh = new THREE.SkinnedMesh(this.geometry, this.material);
+
+    const rootBone = this.skeleton.bones[0];
+    this.mesh.add(rootBone);
+    this.mesh.bind(this.skeleton);
 
     this.scene.add(this.mesh);
 
@@ -61,16 +66,24 @@ class Three extends React.Component {
       switch (assetType) {
         case 0: // skeleton
           console.log("skeleton");
+
+          const bones: THREE.Bone[] = [];
+          const boneInverses: THREE.Matrix4[] = [];
+
           // unsigned jointCount;
           const jointCount = dataView.getUint32(byteOffset, littleEndian);
           byteOffset += 4;
 
           for (let jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
             // glm::mat4 inverseBindPose;
+            const elements: number[] = [];
             for (let i = 0; i < 16; ++i) {
-              dataView.getFloat32(byteOffset, littleEndian);
+              elements.push(dataView.getFloat32(byteOffset, littleEndian));
               byteOffset += 4;
             }
+            const inverseBindPose = new THREE.Matrix4();
+            inverseBindPose.elements = elements;
+            boneInverses.push(inverseBindPose);
 
             // std::string name;
             char = dataView.getInt8(byteOffset);
@@ -81,9 +94,17 @@ class Three extends React.Component {
             }
 
             // short parentIndex;
-            dataView.getInt16(byteOffset, littleEndian);
+            const parentIndex = dataView.getInt16(byteOffset, littleEndian);
             byteOffset += 2;
+
+            bones.push(new THREE.Bone());
+            if (parentIndex !== -1) {
+              bones[parentIndex].add(bones[bones.length - 1]);
+            }
           }
+
+          this.skeleton = new THREE.Skeleton(bones, boneInverses);
+
           break;
 
         case 1: // mesh
@@ -119,22 +140,40 @@ class Three extends React.Component {
             uvs.push(new THREE.Vector2(u, v));
 
             // uint8_t jointIndices[4];
-            dataView.getInt8(byteOffset);
+            const jointIndex0 = dataView.getInt8(byteOffset);
             byteOffset += 1;
-            dataView.getInt8(byteOffset);
+            const jointIndex1 = dataView.getInt8(byteOffset);
             byteOffset += 1;
-            dataView.getInt8(byteOffset);
+            const jointIndex2 = dataView.getInt8(byteOffset);
             byteOffset += 1;
-            dataView.getInt8(byteOffset);
+            const jointIndex3 = dataView.getInt8(byteOffset);
             byteOffset += 1;
 
+            this.geometry.skinIndices.push(
+              new THREE.Vector4(
+                jointIndex0,
+                jointIndex1,
+                jointIndex2,
+                jointIndex3
+              )
+            );
+
             // float jointWeights[3];
-            dataView.getFloat32(byteOffset, littleEndian);
+            const jointWeight0 = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
-            dataView.getFloat32(byteOffset, littleEndian);
+            const jointWeight1 = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
-            dataView.getFloat32(byteOffset, littleEndian);
+            const jointWeight2 = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
+
+            this.geometry.skinWeights.push(
+              new THREE.Vector4(
+                jointWeight0,
+                jointWeight1,
+                jointWeight2,
+                1 - (jointWeight0 + jointWeight1 + jointWeight2)
+              )
+            );
           }
           this.geometry.verticesNeedUpdate = true;
 
@@ -334,7 +373,10 @@ class Three extends React.Component {
           texture.needsUpdate = true;
 
           // this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red material.
-          this.material = new THREE.MeshBasicMaterial({ map: texture });
+          this.material = new THREE.MeshBasicMaterial({
+            map: texture,
+            skinning: true
+          });
 
           break;
       }
