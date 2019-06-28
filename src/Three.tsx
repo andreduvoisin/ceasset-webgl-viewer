@@ -379,7 +379,7 @@ class Three extends React.Component {
 
     this.camera.position.x = 0;
     this.camera.position.y = 100;
-    this.camera.position.z = 700;
+    this.camera.position.z = 300;
   }
 
   render() {
