@@ -1,5 +1,6 @@
 import React from "react";
 import * as THREE from "three";
+import { LineBasicMaterial } from "three";
 
 class Three extends React.Component {
   scene: THREE.Scene = new THREE.Scene();
@@ -11,6 +12,9 @@ class Three extends React.Component {
   mesh: THREE.SkinnedMesh = new THREE.SkinnedMesh();
   material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial();
   skeleton: THREE.Skeleton = new THREE.Skeleton([]);
+  animations: THREE.AnimationClip[] = [];
+  mixer: THREE.AnimationMixer = new THREE.AnimationMixer(this.mesh);
+  clock: THREE.Clock = new THREE.Clock();
 
   mount: any; // TODO: What is this? How do you strongly type it?
 
@@ -34,7 +38,15 @@ class Three extends React.Component {
     this.mesh.add(rootBone);
     this.mesh.bind(this.skeleton);
 
+    this.mixer = new THREE.AnimationMixer(rootBone);
+    const action = this.mixer.clipAction(this.animations[1]);
+    action.play();
+
     this.scene.add(this.mesh);
+
+    const skeletonHelper = new THREE.SkeletonHelper(this.mesh);
+    (skeletonHelper.material as LineBasicMaterial).linewidth = 3;
+    this.scene.add(skeletonHelper);
 
     this.mount.appendChild(this.renderer.domElement);
 
@@ -171,10 +183,12 @@ class Three extends React.Component {
                 jointWeight0,
                 jointWeight1,
                 jointWeight2,
-                1 - (jointWeight0 + jointWeight1 + jointWeight2)
+                1.0 - (jointWeight0 + jointWeight1 + jointWeight2) // TODO: This probably needs some processing.
               )
             );
           }
+          console.log(this.geometry.skinWeights);
+          console.log(this.geometry.skinIndices);
           this.geometry.verticesNeedUpdate = true;
 
           // for (let i = 0; i < uvs.length; i += 3) {}
@@ -239,6 +253,7 @@ class Three extends React.Component {
 
         case 2: // animation
           console.log("animation");
+
           // std::string name;
           char = dataView.getInt8(byteOffset);
           ++byteOffset;
@@ -246,6 +261,10 @@ class Three extends React.Component {
             char = dataView.getInt8(byteOffset);
             ++byteOffset;
           }
+          // TODO: Properly parse the name.
+          // animation.name = name;
+
+          const keyframeTracks: THREE.KeyframeTrack[] = [];
 
           // std::vector<std::vector<TranslationKey>> translations;
           // unsigned componentsCount;
@@ -256,23 +275,42 @@ class Three extends React.Component {
             componentsIndex < componentsCount;
             ++componentsIndex
           ) {
+            let times: number[] = [];
+            let values: number[] = [];
+            // let values: THREE.Vector3[] = [];
+
             // unsigned keyCount;
             const keyCount = dataView.getUint32(byteOffset, littleEndian);
             byteOffset += 4;
 
             for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
               // glm::vec3 translation;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const x = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const y = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const z = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
 
+              values.push(x, y, z);
+              // values.push(new THREE.Vector3(x, y, z));
+
               // float time;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const time = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
+
+              times.push(time);
             }
+
+            // `${this.skeleton.bones[componentsIndex].uuid}.position`,
+            // `.bones[${componentsIndex}].position`
+            const translationTrack = new THREE.VectorKeyframeTrack(
+              `${this.skeleton.bones[componentsIndex].uuid}.position`,
+              times,
+              values,
+              THREE.InterpolateLinear
+            );
+            keyframeTracks.push(translationTrack);
           }
 
           // std::vector<std::vector<RotationKey>> rotations;
@@ -284,25 +322,40 @@ class Three extends React.Component {
             componentsIndex < componentsCount;
             ++componentsIndex
           ) {
+            let times: number[] = [];
+            let values: number[] = [];
+
             // unsigned keyCount;
             const keyCount = dataView.getUint32(byteOffset, littleEndian);
             byteOffset += 4;
 
             for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
               // glm::quat rotation;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const x = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const y = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const z = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const w = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
 
+              values.push(x, y, z, w);
+
               // float time;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const time = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
+
+              times.push(time);
             }
+
+            const rotationTrack = new THREE.QuaternionKeyframeTrack(
+              `${this.skeleton.bones[componentsIndex].uuid}.quaternion`,
+              times,
+              values,
+              THREE.InterpolateLinear
+            );
+            keyframeTracks.push(rotationTrack);
           }
 
           // std::vector<std::vector<ScaleKey>> scales;
@@ -314,28 +367,53 @@ class Three extends React.Component {
             componentsIndex < componentsCount;
             ++componentsIndex
           ) {
+            let times: number[] = [];
+            let values: number[] = [];
+
             // unsigned keyCount;
             const keyCount = dataView.getUint32(byteOffset, littleEndian);
             byteOffset += 4;
 
             for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
               // glm::vec3 scale;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const x = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const y = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const z = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
+
+              values.push(x, y, z);
 
               // float time;
-              dataView.getFloat32(byteOffset, littleEndian);
+              const time = dataView.getFloat32(byteOffset, littleEndian);
               byteOffset += 4;
+
+              times.push(time);
             }
+
+            const scaleTrack = new THREE.VectorKeyframeTrack(
+              `${this.skeleton.bones[componentsIndex].uuid}.scale`,
+              // `.bones[${componentsIndex}].scale`,
+              times,
+              values,
+              THREE.InterpolateLinear
+            );
+            keyframeTracks.push(scaleTrack);
           }
 
+          console.log(keyframeTracks);
+
           // float duration;
-          dataView.getFloat32(byteOffset, littleEndian);
+          const duration = dataView.getFloat32(byteOffset, littleEndian);
           byteOffset += 4;
+
+          const animation = new THREE.AnimationClip(
+            "anim",
+            duration,
+            keyframeTracks
+          );
+          this.animations.push(animation);
 
           break;
 
@@ -400,6 +478,8 @@ class Three extends React.Component {
     requestAnimationFrame(this.animate.bind(this));
 
     // this.rotateCube();
+    const deltaTime = this.clock.getDelta();
+    this.mixer.update(deltaTime);
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -421,7 +501,7 @@ class Three extends React.Component {
 
     this.camera.position.x = 0;
     this.camera.position.y = 100;
-    this.camera.position.z = 300;
+    this.camera.position.z = 400;
   }
 
   render() {
