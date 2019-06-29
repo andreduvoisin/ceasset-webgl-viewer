@@ -178,21 +178,21 @@ class Three extends React.Component {
             const jointWeight2 = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
 
+            const jointWeight3 =
+              1.0 - (jointWeight0 + jointWeight1 + jointWeight2);
+
             this.geometry.skinWeights.push(
               new THREE.Vector4(
                 jointWeight0,
                 jointWeight1,
                 jointWeight2,
-                1.0 - (jointWeight0 + jointWeight1 + jointWeight2) // TODO: This probably needs some processing.
+                jointWeight3
               )
             );
           }
           console.log(this.geometry.skinWeights);
           console.log(this.geometry.skinIndices);
           this.geometry.verticesNeedUpdate = true;
-
-          // for (let i = 0; i < uvs.length; i += 3) {}
-          // console.log(this.geometry.faceVertexUvs);
 
           // unsigned indicesCount;
           const indicesCount = dataView.getUint32(byteOffset, littleEndian);
@@ -277,7 +277,6 @@ class Three extends React.Component {
           ) {
             let times: number[] = [];
             let values: number[] = [];
-            // let values: THREE.Vector3[] = [];
 
             // unsigned keyCount;
             const keyCount = dataView.getUint32(byteOffset, littleEndian);
@@ -293,7 +292,6 @@ class Three extends React.Component {
               byteOffset += 4;
 
               values.push(x, y, z);
-              // values.push(new THREE.Vector3(x, y, z));
 
               // float time;
               const time = dataView.getFloat32(byteOffset, littleEndian);
@@ -302,8 +300,6 @@ class Three extends React.Component {
               times.push(time);
             }
 
-            // `${this.skeleton.bones[componentsIndex].uuid}.position`,
-            // `.bones[${componentsIndex}].position`
             const translationTrack = new THREE.VectorKeyframeTrack(
               `${this.skeleton.bones[componentsIndex].uuid}.position`,
               times,
@@ -394,7 +390,6 @@ class Three extends React.Component {
 
             const scaleTrack = new THREE.VectorKeyframeTrack(
               `${this.skeleton.bones[componentsIndex].uuid}.scale`,
-              // `.bones[${componentsIndex}].scale`,
               times,
               values,
               THREE.InterpolateLinear
