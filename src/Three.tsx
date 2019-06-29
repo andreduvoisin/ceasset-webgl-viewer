@@ -1,6 +1,5 @@
 import React from "react";
 import * as THREE from "three";
-import { LineBasicMaterial } from "three";
 
 class Three extends React.Component {
   scene: THREE.Scene = new THREE.Scene();
@@ -8,7 +7,7 @@ class Three extends React.Component {
 
   camera: THREE.Camera = new THREE.Camera();
   // cube: THREE.Mesh;
-  geometry: THREE.Geometry = new THREE.Geometry();
+  geometry: THREE.BufferGeometry = new THREE.BufferGeometry();
   mesh: THREE.SkinnedMesh = new THREE.SkinnedMesh();
   material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial();
   skeleton: THREE.Skeleton = new THREE.Skeleton([]);
@@ -36,7 +35,7 @@ class Three extends React.Component {
 
     const rootBone = this.skeleton.bones[0];
     this.mesh.add(rootBone);
-    this.mesh.bind(this.skeleton);
+    this.mesh.bind(this.skeleton, new THREE.Matrix4());
 
     this.mixer = new THREE.AnimationMixer(rootBone);
     const action = this.mixer.clipAction(this.animations[1]);
@@ -45,7 +44,6 @@ class Three extends React.Component {
     this.scene.add(this.mesh);
 
     const skeletonHelper = new THREE.SkeletonHelper(this.mesh);
-    (skeletonHelper.material as LineBasicMaterial).linewidth = 3;
     this.scene.add(skeletonHelper);
 
     this.mount.appendChild(this.renderer.domElement);
@@ -109,10 +107,11 @@ class Three extends React.Component {
             const parentIndex = dataView.getInt16(byteOffset, littleEndian);
             byteOffset += 2;
 
-            bones.push(new THREE.Bone());
+            const bone = new THREE.Bone();
             if (parentIndex !== -1) {
-              bones[parentIndex].add(bones[bones.length - 1]);
+              bones[parentIndex].add(bone);
             }
+            bones.push(bone);
           }
 
           this.skeleton = new THREE.Skeleton(bones, boneInverses);
@@ -127,7 +126,11 @@ class Three extends React.Component {
           byteOffset += 4;
 
           // std::vector<Vertex1P1UV4J> m_vertices;
-          const uvs: THREE.Vector2[] = [];
+          const vertices = new Float32Array(verticesCount * 3);
+          const uvs = new Float32Array(verticesCount * 2);
+          const skinIndices = new Uint8Array(verticesCount * 4);
+          const skinWeights = new Float32Array(verticesCount * 4);
+
           for (
             let vertexIndex = 0;
             vertexIndex < verticesCount;
@@ -141,7 +144,10 @@ class Three extends React.Component {
             const z = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
 
-            this.geometry.vertices.push(new THREE.Vector3(x, y, z));
+            const vertexStride = vertexIndex * 3;
+            vertices[vertexStride] = x;
+            vertices[vertexStride + 1] = y;
+            vertices[vertexStride + 2] = z;
 
             // float uv[2];
             const u = dataView.getFloat32(byteOffset, littleEndian);
@@ -149,7 +155,9 @@ class Three extends React.Component {
             const v = dataView.getFloat32(byteOffset, littleEndian);
             byteOffset += 4;
 
-            uvs.push(new THREE.Vector2(u, v));
+            const uvsStride = vertexIndex * 2;
+            uvs[uvsStride] = u;
+            uvs[uvsStride + 1] = v;
 
             // uint8_t jointIndices[4];
             const jointIndex0 = dataView.getInt8(byteOffset);
@@ -161,14 +169,11 @@ class Three extends React.Component {
             const jointIndex3 = dataView.getInt8(byteOffset);
             byteOffset += 1;
 
-            this.geometry.skinIndices.push(
-              new THREE.Vector4(
-                jointIndex0,
-                jointIndex1,
-                jointIndex2,
-                jointIndex3
-              )
-            );
+            const skinIndexStride = vertexIndex * 4;
+            skinIndices[skinIndexStride] = jointIndex0;
+            skinIndices[skinIndexStride + 1] = jointIndex1;
+            skinIndices[skinIndexStride + 2] = jointIndex2;
+            skinIndices[skinIndexStride + 3] = jointIndex3;
 
             // float jointWeights[3];
             const jointWeight0 = dataView.getFloat32(byteOffset, littleEndian);
@@ -181,24 +186,34 @@ class Three extends React.Component {
             const jointWeight3 =
               1.0 - (jointWeight0 + jointWeight1 + jointWeight2);
 
-            this.geometry.skinWeights.push(
-              new THREE.Vector4(
-                jointWeight0,
-                jointWeight1,
-                jointWeight2,
-                jointWeight3
-              )
-            );
+            const skinWeightStride = vertexIndex * 4;
+            skinWeights[skinWeightStride] = jointWeight0;
+            skinWeights[skinWeightStride + 1] = jointWeight1;
+            skinWeights[skinWeightStride + 2] = jointWeight2;
+            skinWeights[skinWeightStride + 3] = jointWeight3;
           }
-          console.log(this.geometry.skinWeights);
-          console.log(this.geometry.skinIndices);
-          this.geometry.verticesNeedUpdate = true;
+
+          this.geometry.addAttribute(
+            "position",
+            new THREE.BufferAttribute(vertices, 3)
+          );
+          this.geometry.addAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+          this.geometry.addAttribute(
+            "skinIndex",
+            new THREE.BufferAttribute(skinIndices, 4)
+          );
+          this.geometry.addAttribute(
+            "skinWeight",
+            new THREE.BufferAttribute(skinWeights, 4)
+          );
 
           // unsigned indicesCount;
           const indicesCount = dataView.getUint32(byteOffset, littleEndian);
           byteOffset += 4;
 
           // std::vector<unsigned int> m_indices;
+          // TODO: Use BufferAttribute instead for efficiency.
+          const indices: number[] = [];
           for (let indexIndex = 0; indexIndex < indicesCount; indexIndex += 3) {
             const a = dataView.getUint32(byteOffset, littleEndian);
             byteOffset += 4;
@@ -207,11 +222,9 @@ class Three extends React.Component {
             const c = dataView.getUint32(byteOffset, littleEndian);
             byteOffset += 4;
 
-            this.geometry.faces.push(new THREE.Face3(a, b, c));
-            this.geometry.faceVertexUvs[0].push([uvs[a], uvs[b], uvs[c]]);
+            indices.push(a, b, c);
           }
-          this.geometry.elementsNeedUpdate = true;
-          this.geometry.uvsNeedUpdate = true;
+          this.geometry.setIndex(indices);
 
           // std::string m_diffuseMapName;
           char = dataView.getInt8(byteOffset);
@@ -496,7 +509,7 @@ class Three extends React.Component {
 
     this.camera.position.x = 0;
     this.camera.position.y = 100;
-    this.camera.position.z = 400;
+    this.camera.position.z = 200;
   }
 
   render() {
