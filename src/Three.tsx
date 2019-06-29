@@ -14,7 +14,7 @@ class Three extends React.Component {
   mixer: THREE.AnimationMixer = new THREE.AnimationMixer(this.mesh);
   clock: THREE.Clock = new THREE.Clock();
 
-  mount: any; // TODO: What is this? How do you strongly type it?
+  mount!: HTMLDivElement;
 
   async componentDidMount() {
     this.onWindowResize();
@@ -491,7 +491,15 @@ class Three extends React.Component {
   }
 
   render() {
-    return <div ref={ref => (this.mount = ref)} />;
+    return (
+      <div
+        ref={ref => {
+          if (ref != null) {
+            this.mount = ref;
+          }
+        }}
+      />
+    );
   }
 }
 
