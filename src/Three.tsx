@@ -59,7 +59,7 @@ class Three extends React.Component {
     const dataView = new DataView(buffer);
 
     if (!this.checkHeader(dataView)) {
-      console.log("ceasset: bad header");
+      console.error("ceasset: bad header");
       return;
     }
 
@@ -74,9 +74,8 @@ class Three extends React.Component {
       let char = 0;
 
       switch (assetType) {
-        case 0: // skeleton
-          console.log("skeleton");
-
+        // skeleton
+        case 0:
           const bones: THREE.Bone[] = [];
           const boneInverses: THREE.Matrix4[] = [];
 
@@ -118,9 +117,8 @@ class Three extends React.Component {
 
           break;
 
-        case 1: // mesh
-          console.log("mesh");
-
+        // mesh
+        case 1:
           // unsigned verticesCount;
           const verticesCount = dataView.getUint32(byteOffset, littleEndian);
           byteOffset += 4;
@@ -264,9 +262,8 @@ class Three extends React.Component {
 
           break;
 
-        case 2: // animation
-          console.log("animation");
-
+        // animation
+        case 2:
           // std::string name;
           char = dataView.getInt8(byteOffset);
           ++byteOffset;
@@ -410,8 +407,6 @@ class Three extends React.Component {
             keyframeTracks.push(scaleTrack);
           }
 
-          console.log(keyframeTracks);
-
           // float duration;
           const duration = dataView.getFloat32(byteOffset, littleEndian);
           byteOffset += 4;
@@ -425,9 +420,8 @@ class Three extends React.Component {
 
           break;
 
-        case 3: // texture
-          console.log("texture");
-
+        // texture
+        case 3:
           // int width;
           const width = dataView.getInt32(byteOffset, littleEndian);
           byteOffset += 4;
@@ -485,17 +479,11 @@ class Three extends React.Component {
   animate() {
     requestAnimationFrame(this.animate.bind(this));
 
-    // this.rotateCube();
     const deltaTime = this.clock.getDelta();
     this.mixer.update(deltaTime);
 
     this.renderer.render(this.scene, this.camera);
   }
-
-  // rotateCube() {
-  //   this.cube.rotation.x += 0.01;
-  //   this.cube.rotation.y += 0.01;
-  // }
 
   onWindowResize() {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
