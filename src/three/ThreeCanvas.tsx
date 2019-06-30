@@ -31,8 +31,10 @@ class Three extends React.Component {
     const assetLoader = new CEAssetLoader("assets/Quarterback Pass.ceasset");
     const asset = await assetLoader.load();
     this.addMeshesToScene(asset.meshes);
-    this.addSkeletonHelperToScene(asset.skeleton);
     this.playAnimation(asset, 1);
+
+    this.addSkeletonHelperToScene(asset.skeleton);
+    this.addGridHelperToScene();
 
     this.animate();
   }
@@ -58,17 +60,22 @@ class Three extends React.Component {
     });
   }
 
+  playAnimation(asset: ThreeAsset, animationIndex: number) {
+    const rootBone = asset.skeleton.bones[0];
+    this.mixer = new THREE.AnimationMixer(rootBone);
+    const action = this.mixer.clipAction(asset.animations[animationIndex]);
+    action.play();
+  }
+
   addSkeletonHelperToScene(skeleton: THREE.Skeleton) {
     const rootBone = skeleton.bones[0];
     const skeletonHelper = new THREE.SkeletonHelper(rootBone);
     this.scene.add(skeletonHelper);
   }
 
-  playAnimation(asset: ThreeAsset, animationIndex: number) {
-    const rootBone = asset.skeleton.bones[0];
-    this.mixer = new THREE.AnimationMixer(rootBone);
-    const action = this.mixer.clipAction(asset.animations[animationIndex]);
-    action.play();
+  addGridHelperToScene() {
+    const gridHelper = new THREE.GridHelper(1000, 10);
+    this.scene.add(gridHelper);
   }
 
   animate() {
