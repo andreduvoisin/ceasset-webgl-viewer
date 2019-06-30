@@ -1,11 +1,11 @@
 import React from "react";
 import "./App.css";
-import Three from "./Three";
+import ThreeCanvas from "./ThreeCanvas";
 
 function App() {
   return (
     <div className="App">
-      <Three />
+      <ThreeCanvas />
     </div>
   );
 }
