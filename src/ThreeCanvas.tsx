@@ -53,7 +53,7 @@ class Three extends React.Component {
       75,
       window.innerWidth / window.innerHeight,
       0.1,
-      2000
+      10000
     );
     this.camera.position.set(0, 100, 300);
   }
