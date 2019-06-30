@@ -6,19 +6,17 @@ import Stats from "stats.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 class Three extends React.Component {
-  scene: THREE.Scene = new THREE.Scene();
-  renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({
-    antialias: true
-  });
+  scene = new THREE.Scene();
+  renderer!: THREE.WebGLRenderer;
   rendererMount!: HTMLDivElement;
 
-  camera: THREE.PerspectiveCamera = new THREE.PerspectiveCamera();
-  clock: THREE.Clock = new THREE.Clock();
+  camera!: THREE.PerspectiveCamera;
+  clock = new THREE.Clock();
   controls!: OrbitControls;
 
   mixer!: THREE.AnimationMixer;
 
-  stats = new Stats();
+  stats!: Stats;
   statsMount!: HTMLDivElement;
 
   async componentDidMount() {
@@ -67,6 +65,7 @@ class Three extends React.Component {
   }
 
   initializeStats() {
+    this.stats = new Stats();
     this.stats.showPanel(0);
     this.statsMount.appendChild(this.stats.dom);
   }
