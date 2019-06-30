@@ -31,17 +31,21 @@ class CEAssetImporter {
 
         case CEAssetType.MESH:
           const mesh = assetDeserializer.readMesh();
+
           if (asset.meshes === undefined) {
             asset.meshes = [];
           }
+
           asset.meshes.push(mesh);
           break;
 
         case CEAssetType.ANIMATION:
           const animation = assetDeserializer.readAnimation();
+
           if (asset.animations === undefined) {
             asset.animations = [];
           }
+
           asset.animations.push(animation);
           break;
 
