@@ -138,10 +138,7 @@ class CEAssetLoader {
       new THREE.BufferAttribute(skinWeights, skinWeightsStride)
     );
 
-    // TODO: Use BufferAttribute instead for efficiency.
-    const indices: number[] = [];
-    mesh.indices.forEach(index => indices.push(index));
-    geometry.setIndex(indices);
+    geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
 
     return geometry;
   }
