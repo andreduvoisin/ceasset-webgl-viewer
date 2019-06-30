@@ -1,7 +1,7 @@
 import React from "react";
 import * as THREE from "three";
-import CEAssetLoader from "./three/CEAssetLoader";
-import ThreeAsset from "./three/ThreeAsset";
+import CEAssetLoader from "./CEAssetLoader";
+import ThreeAsset from "./ThreeAsset";
 
 class Three extends React.Component {
   scene: THREE.Scene = new THREE.Scene();
