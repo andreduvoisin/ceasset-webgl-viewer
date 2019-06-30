@@ -1,14 +1,14 @@
 import BufferStream from "../../BufferStream";
-import CEAssetType from "../data/CEAssetType";
-import CESkeleton from "../data/CESkeleton";
-import CEJoint from "../data/CEJoint";
-import CEMesh from "../data/CEMesh";
-import CEVertex from "../data/CEVertex";
-import CEAnimation from "../data/CEAnimation";
-import CETranslationKey from "../data/CETranslationKey";
-import CERotationKey from "../data/CERotationKey";
-import CEScaleKey from "../data/CEScaleKey";
-import CETexture from "../data/CETexture";
+import CEAssetType from "../data/asset/CEAssetType";
+import CESkeleton from "../data/skeleton/CESkeleton";
+import CEJoint from "../data/skeleton/CEJoint";
+import CEMesh from "../data/mesh/CEMesh";
+import CEVertex from "../data/mesh/CEVertex";
+import CEAnimation from "../data/animation/CEAnimation";
+import CETranslationKey from "../data/animation/CETranslationKey";
+import CERotationKey from "../data/animation/CERotationKey";
+import CEScaleKey from "../data/animation/CEScaleKey";
+import CETexture from "../data/texture/CETexture";
 
 class CEAssetDeserializer {
   private bufferStream: BufferStream;

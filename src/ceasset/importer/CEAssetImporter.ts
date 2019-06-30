@@ -1,6 +1,6 @@
-import CEAsset from "../data/CEAsset";
+import CEAsset from "../data/asset/CEAsset";
 import BufferStream from "../../BufferStream";
-import CEAssetType from "../data/CEAssetType";
+import CEAssetType from "../data/asset/CEAssetType";
 import CEAssetDeserializer from "../deserializer/CEAssetDeserializer";
 
 class CEAssetImporter {
