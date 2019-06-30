@@ -1,10 +1,13 @@
 import React from "react";
 import * as THREE from "three";
 import CEAssetLoader from "./three/CEAssetLoader";
+import ThreeAsset from "./three/ThreeAsset";
 
 class Three extends React.Component {
   scene: THREE.Scene = new THREE.Scene();
-  renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer();
+  renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({
+    antialias: true
+  });
 
   camera: THREE.Camera = new THREE.Camera();
   clock: THREE.Clock = new THREE.Clock();
@@ -14,36 +17,19 @@ class Three extends React.Component {
   mount!: HTMLDivElement;
 
   async componentDidMount() {
+    this.mount.appendChild(this.renderer.domElement);
+
     this.onWindowResize();
     window.addEventListener("resize", this.onWindowResize.bind(this));
 
     const assetLoader = new CEAssetLoader("assets/Quarterback Pass.ceasset");
     const asset = await assetLoader.load();
+    this.addMeshesToScene(asset.meshes);
+    this.addSkeletonHelperToScene(asset.skeleton);
 
-    asset.meshes.forEach(mesh => {
-      this.scene.add(mesh);
-    });
-
-    const rootBone = asset.skeleton.bones[0];
-    this.mixer = new THREE.AnimationMixer(rootBone);
-    const action = this.mixer.clipAction(asset.animations[1]);
-    action.play();
-
-    const skeletonHelper = new THREE.SkeletonHelper(rootBone);
-    this.scene.add(skeletonHelper);
-
-    this.mount.appendChild(this.renderer.domElement);
+    this.playAnimation(asset, 0);
 
     this.animate();
-  }
-
-  animate() {
-    requestAnimationFrame(this.animate.bind(this));
-
-    const deltaTime = this.clock.getDelta();
-    this.mixer.update(deltaTime);
-
-    this.renderer.render(this.scene, this.camera);
   }
 
   onWindowResize() {
@@ -58,7 +44,35 @@ class Three extends React.Component {
 
     this.camera.position.x = 0;
     this.camera.position.y = 100;
-    this.camera.position.z = 200;
+    this.camera.position.z = 500;
+  }
+
+  addMeshesToScene(meshes: THREE.SkinnedMesh[]) {
+    meshes.forEach(mesh => {
+      this.scene.add(mesh);
+    });
+  }
+
+  addSkeletonHelperToScene(skeleton: THREE.Skeleton) {
+    const rootBone = skeleton.bones[0];
+    const skeletonHelper = new THREE.SkeletonHelper(rootBone);
+    this.scene.add(skeletonHelper);
+  }
+
+  playAnimation(asset: ThreeAsset, animationIndex: number) {
+    const rootBone = asset.skeleton.bones[0];
+    this.mixer = new THREE.AnimationMixer(rootBone);
+    const action = this.mixer.clipAction(asset.animations[animationIndex]);
+    action.play();
+  }
+
+  animate() {
+    requestAnimationFrame(this.animate.bind(this));
+
+    const deltaTime = this.clock.getDelta();
+    this.mixer.update(deltaTime * this.mixer.timeScale);
+
+    this.renderer.render(this.scene, this.camera);
   }
 
   render() {
