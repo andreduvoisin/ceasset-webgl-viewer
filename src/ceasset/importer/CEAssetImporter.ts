@@ -1,62 +1,38 @@
-import React from "react";
+import CEAsset from "../data/CEAsset";
 import * as THREE from "three";
-import BufferStream from "./BufferStream";
 
-class Three extends React.Component {
-  scene: THREE.Scene = new THREE.Scene();
-  renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer();
+class CEAssetImporter {
+  fileName: string;
+  littleEndian: boolean;
 
-  camera: THREE.Camera = new THREE.Camera();
-  geometry: THREE.BufferGeometry = new THREE.BufferGeometry();
-  mesh: THREE.SkinnedMesh = new THREE.SkinnedMesh();
-  material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial();
-  skeleton: THREE.Skeleton = new THREE.Skeleton([]);
-  animations: THREE.AnimationClip[] = [];
-  mixer: THREE.AnimationMixer = new THREE.AnimationMixer(this.mesh);
-  clock: THREE.Clock = new THREE.Clock();
+  constructor(fileName: string) {
+    this.fileName = fileName;
+    this.littleEndian = true;
+  }
 
-  mount!: HTMLDivElement;
-
-  async componentDidMount() {
-    this.onWindowResize();
-    window.addEventListener("resize", this.onWindowResize.bind(this));
-
-    await this.readFile();
-
-    this.mesh = new THREE.SkinnedMesh(this.geometry, this.material);
-
-    const rootBone = this.skeleton.bones[0];
-    this.mesh.add(rootBone);
-    this.mesh.bind(this.skeleton, new THREE.Matrix4());
-
-    this.mixer = new THREE.AnimationMixer(rootBone);
-    const action = this.mixer.clipAction(this.animations[1]);
-    action.play();
-
-    this.scene.add(this.mesh);
-
-    const skeletonHelper = new THREE.SkeletonHelper(this.mesh);
-    this.scene.add(skeletonHelper);
-
-    this.mount.appendChild(this.renderer.domElement);
-
-    this.animate();
+  import(): CEAsset {
+    const asset = new CEAsset();
+    return asset;
   }
 
   async readFile() {
-    const buffer = await fetch("assets/Quarterback Pass.ceasset").then(result =>
-      result.arrayBuffer()
-    );
+    const buffer = await fetch(this.fileName)
+      .then(result => result.arrayBuffer());
 
-    const bufferStream = new BufferStream(buffer, true);
+    const dataView = new DataView(buffer);
 
-    if (!this.checkHeader(bufferStream)) {
+    if (!this.checkHeader(dataView)) {
       console.error("ceasset: bad header");
       return;
     }
 
-    while (bufferStream.hasData()) {
-      const assetType = bufferStream.getInt32();
+    let byteOffset = 8;
+
+    while (byteOffset < dataView.byteLength) {
+      const assetType = dataView.getInt32(byteOffset, this.littleEndian);
+      byteOffset += 4;
+
+      let char = 0;
 
       switch (assetType) {
         // skeleton
@@ -65,23 +41,31 @@ class Three extends React.Component {
           const boneInverses: THREE.Matrix4[] = [];
 
           // unsigned jointCount;
-          const jointCount = bufferStream.getUint32();
+          const jointCount = dataView.getUint32(byteOffset, this.littleEndian);
+          byteOffset += 4;
 
           for (let jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
             // glm::mat4 inverseBindPose;
             const elements: number[] = [];
             for (let i = 0; i < 16; ++i) {
-              elements.push(bufferStream.getFloat32());
+              elements.push(dataView.getFloat32(byteOffset, this.littleEndian));
+              byteOffset += 4;
             }
             const inverseBindPose = new THREE.Matrix4();
             inverseBindPose.elements = elements;
             boneInverses.push(inverseBindPose);
 
             // std::string name;
-            bufferStream.getString();
+            char = dataView.getInt8(byteOffset);
+            ++byteOffset;
+            while (char !== "\0".charCodeAt(0)) {
+              char = dataView.getInt8(byteOffset);
+              ++byteOffset;
+            }
 
             // short parentIndex;
-            const parentIndex = bufferStream.getInt16();
+            const parentIndex = dataView.getInt16(byteOffset, this.littleEndian);
+            byteOffset += 2;
 
             const bone = new THREE.Bone();
             if (parentIndex !== -1) {
@@ -97,7 +81,8 @@ class Three extends React.Component {
         // mesh
         case 1:
           // unsigned verticesCount;
-          const verticesCount = bufferStream.getUint32();
+          const verticesCount = dataView.getUint32(byteOffset, this.littleEndian);
+          byteOffset += 4;
 
           // std::vector<Vertex1P1UV4J> m_vertices;
           const vertices = new Float32Array(verticesCount * 3);
@@ -111,9 +96,12 @@ class Three extends React.Component {
             ++vertexIndex
           ) {
             // glm::vec3 position;
-            const x = bufferStream.getFloat32();
-            const y = bufferStream.getFloat32();
-            const z = bufferStream.getFloat32();
+            const x = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
+            const y = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
+            const z = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
 
             const vertexStride = vertexIndex * 3;
             vertices[vertexStride] = x;
@@ -121,18 +109,24 @@ class Three extends React.Component {
             vertices[vertexStride + 2] = z;
 
             // float uv[2];
-            const u = bufferStream.getFloat32();
-            const v = bufferStream.getFloat32();
+            const u = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
+            const v = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
 
             const uvsStride = vertexIndex * 2;
             uvs[uvsStride] = u;
             uvs[uvsStride + 1] = v;
 
             // uint8_t jointIndices[4];
-            const jointIndex0 = bufferStream.getInt8();
-            const jointIndex1 = bufferStream.getInt8();
-            const jointIndex2 = bufferStream.getInt8();
-            const jointIndex3 = bufferStream.getInt8();
+            const jointIndex0 = dataView.getInt8(byteOffset);
+            byteOffset += 1;
+            const jointIndex1 = dataView.getInt8(byteOffset);
+            byteOffset += 1;
+            const jointIndex2 = dataView.getInt8(byteOffset);
+            byteOffset += 1;
+            const jointIndex3 = dataView.getInt8(byteOffset);
+            byteOffset += 1;
 
             const skinIndexStride = vertexIndex * 4;
             skinIndices[skinIndexStride] = jointIndex0;
@@ -141,9 +135,12 @@ class Three extends React.Component {
             skinIndices[skinIndexStride + 3] = jointIndex3;
 
             // float jointWeights[3];
-            const jointWeight0 = bufferStream.getFloat32();
-            const jointWeight1 = bufferStream.getFloat32();
-            const jointWeight2 = bufferStream.getFloat32();
+            const jointWeight0 = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
+            const jointWeight1 = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
+            const jointWeight2 = dataView.getFloat32(byteOffset, this.littleEndian);
+            byteOffset += 4;
 
             const jointWeight3 =
               1.0 - (jointWeight0 + jointWeight1 + jointWeight2);
@@ -170,44 +167,71 @@ class Three extends React.Component {
           );
 
           // unsigned indicesCount;
-          const indicesCount = bufferStream.getUint32();
+          const indicesCount = dataView.getUint32(byteOffset, this.littleEndian);
+          byteOffset += 4;
 
           // std::vector<unsigned int> m_indices;
           // TODO: Use BufferAttribute instead for efficiency.
           const indices: number[] = [];
           for (let indexIndex = 0; indexIndex < indicesCount; indexIndex += 3) {
-            const a = bufferStream.getUint32();
-            const b = bufferStream.getUint32();
-            const c = bufferStream.getUint32();
+            const a = dataView.getUint32(byteOffset, this.littleEndian);
+            byteOffset += 4;
+            const b = dataView.getUint32(byteOffset, this.littleEndian);
+            byteOffset += 4;
+            const c = dataView.getUint32(byteOffset, this.littleEndian);
+            byteOffset += 4;
 
             indices.push(a, b, c);
           }
           this.geometry.setIndex(indices);
 
           // std::string m_diffuseMapName;
-          bufferStream.getString();
+          char = dataView.getInt8(byteOffset);
+          ++byteOffset;
+          while (char !== "\0".charCodeAt(0)) {
+            char = dataView.getInt8(byteOffset);
+            ++byteOffset;
+          }
 
           // std::string m_specularMapName;
-          bufferStream.getString();
+          char = dataView.getInt8(byteOffset);
+          ++byteOffset;
+          while (char !== "\0".charCodeAt(0)) {
+            char = dataView.getInt8(byteOffset);
+            ++byteOffset;
+          }
 
           // std::string m_normalMapName;
-          bufferStream.getString();
+          char = dataView.getInt8(byteOffset);
+          ++byteOffset;
+          while (char !== "\0".charCodeAt(0)) {
+            char = dataView.getInt8(byteOffset);
+            ++byteOffset;
+          }
 
           // uint8_t m_diffuseIndex;
-          bufferStream.getInt8();
+          dataView.getInt8(byteOffset);
+          ++byteOffset;
 
           // uint8_t m_specularIndex;
-          bufferStream.getInt8();
+          dataView.getInt8(byteOffset);
+          ++byteOffset;
 
           // uint8_t m_normalIndex;
-          bufferStream.getInt8();
+          dataView.getInt8(byteOffset);
+          ++byteOffset;
 
           break;
 
         // animation
         case 2:
           // std::string name;
-          bufferStream.getString();
+          char = dataView.getInt8(byteOffset);
+          ++byteOffset;
+          while (char !== "\0".charCodeAt(0)) {
+            char = dataView.getInt8(byteOffset);
+            ++byteOffset;
+          }
           // TODO: Properly parse the name.
           // animation.name = name;
 
@@ -215,7 +239,8 @@ class Three extends React.Component {
 
           // std::vector<std::vector<TranslationKey>> translations;
           // unsigned componentsCount;
-          let componentsCount = bufferStream.getUint32();
+          let componentsCount = dataView.getUint32(byteOffset, this.littleEndian);
+          byteOffset += 4;
           for (
             let componentsIndex = 0;
             componentsIndex < componentsCount;
@@ -225,18 +250,23 @@ class Three extends React.Component {
             let values: number[] = [];
 
             // unsigned keyCount;
-            const keyCount = bufferStream.getUint32();
+            const keyCount = dataView.getUint32(byteOffset, this.littleEndian);
+            byteOffset += 4;
 
             for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
               // glm::vec3 translation;
-              const x = bufferStream.getFloat32();
-              const y = bufferStream.getFloat32();
-              const z = bufferStream.getFloat32();
+              const x = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
+              const y = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
+              const z = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
 
               values.push(x, y, z);
 
               // float time;
-              const time = bufferStream.getFloat32();
+              const time = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
 
               times.push(time);
             }
@@ -252,7 +282,8 @@ class Three extends React.Component {
 
           // std::vector<std::vector<RotationKey>> rotations;
           // unsigned componentsCount;
-          componentsCount = bufferStream.getUint32();
+          componentsCount = dataView.getUint32(byteOffset, this.littleEndian);
+          byteOffset += 4;
           for (
             let componentsIndex = 0;
             componentsIndex < componentsCount;
@@ -262,19 +293,25 @@ class Three extends React.Component {
             let values: number[] = [];
 
             // unsigned keyCount;
-            const keyCount = bufferStream.getUint32();
+            const keyCount = dataView.getUint32(byteOffset, this.littleEndian);
+            byteOffset += 4;
 
             for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
               // glm::quat rotation;
-              const x = bufferStream.getFloat32();
-              const y = bufferStream.getFloat32();
-              const z = bufferStream.getFloat32();
-              const w = bufferStream.getFloat32();
+              const x = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
+              const y = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
+              const z = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
+              const w = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
 
               values.push(x, y, z, w);
 
               // float time;
-              const time = bufferStream.getFloat32();
+              const time = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
 
               times.push(time);
             }
@@ -290,7 +327,8 @@ class Three extends React.Component {
 
           // std::vector<std::vector<ScaleKey>> scales;
           // unsigned componentsCount;
-          componentsCount = bufferStream.getUint32();
+          componentsCount = dataView.getUint32(byteOffset, this.littleEndian);
+          byteOffset += 4;
           for (
             let componentsIndex = 0;
             componentsIndex < componentsCount;
@@ -300,18 +338,23 @@ class Three extends React.Component {
             let values: number[] = [];
 
             // unsigned keyCount;
-            const keyCount = bufferStream.getUint32();
+            const keyCount = dataView.getUint32(byteOffset, this.littleEndian);
+            byteOffset += 4;
 
             for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
               // glm::vec3 scale;
-              const x = bufferStream.getFloat32();
-              const y = bufferStream.getFloat32();
-              const z = bufferStream.getFloat32();
+              const x = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
+              const y = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
+              const z = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
 
               values.push(x, y, z);
 
               // float time;
-              const time = bufferStream.getFloat32();
+              const time = dataView.getFloat32(byteOffset, this.littleEndian);
+              byteOffset += 4;
 
               times.push(time);
             }
@@ -326,7 +369,8 @@ class Three extends React.Component {
           }
 
           // float duration;
-          const duration = bufferStream.getFloat32();
+          const duration = dataView.getFloat32(byteOffset, this.littleEndian);
+          byteOffset += 4;
 
           const animation = new THREE.AnimationClip(
             "anim",
@@ -340,17 +384,21 @@ class Three extends React.Component {
         // texture
         case 3:
           // int width;
-          const width = bufferStream.getInt32();
+          const width = dataView.getInt32(byteOffset, this.littleEndian);
+          byteOffset += 4;
           // int height;
-          const height = bufferStream.getInt32();
+          const height = dataView.getInt32(byteOffset, this.littleEndian);
+          byteOffset += 4;
           // int channels;
-          const channels = bufferStream.getInt32();
+          const channels = dataView.getInt32(byteOffset, this.littleEndian);
+          byteOffset += 4;
 
           // std::vector<std::byte> data;
           const size = width * height * channels;
           const data = new Uint8Array(size);
           for (let i = 0; i < size; ++i) {
-            data[i] = bufferStream.getByte();
+            data[i] = dataView.getUint8(byteOffset);
+            ++byteOffset;
           }
 
           const texture = new THREE.DataTexture(
@@ -375,54 +423,18 @@ class Three extends React.Component {
     }
   }
 
-  checkHeader(bufferStream: BufferStream): boolean {
+  checkHeader(dataView: DataView): boolean {
     return (
-      bufferStream.getChar() === "C" &&
-      bufferStream.getChar() === "E" &&
-      bufferStream.getChar() === "A" &&
-      bufferStream.getChar() === "S" &&
-      bufferStream.getChar() === "S" &&
-      bufferStream.getChar() === "E" &&
-      bufferStream.getChar() === "T" &&
-      bufferStream.getChar() === "\0"
-    );
-  }
-
-  animate() {
-    requestAnimationFrame(this.animate.bind(this));
-
-    const deltaTime = this.clock.getDelta();
-    this.mixer.update(deltaTime);
-
-    this.renderer.render(this.scene, this.camera);
-  }
-
-  onWindowResize() {
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-
-    this.camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
-
-    this.camera.position.x = 0;
-    this.camera.position.y = 100;
-    this.camera.position.z = 200;
-  }
-
-  render() {
-    return (
-      <div
-        ref={ref => {
-          if (ref != null) {
-            this.mount = ref;
-          }
-        }}
-      />
+      dataView.getInt8(0) === "C".charCodeAt(0) &&
+      dataView.getInt8(1) === "E".charCodeAt(0) &&
+      dataView.getInt8(2) === "A".charCodeAt(0) &&
+      dataView.getInt8(3) === "S".charCodeAt(0) &&
+      dataView.getInt8(4) === "S".charCodeAt(0) &&
+      dataView.getInt8(5) === "E".charCodeAt(0) &&
+      dataView.getInt8(6) === "T".charCodeAt(0) &&
+      dataView.getInt8(7) === "\0".charCodeAt(0)
     );
   }
 }
 
-export default Three;
+export default CEAssetImporter;
