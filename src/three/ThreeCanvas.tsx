@@ -2,32 +2,37 @@ import React from "react";
 import * as THREE from "three";
 import CEAssetLoader from "./CEAssetLoader";
 import ThreeAsset from "./ThreeAsset";
+import Stats from "stats.js";
 
 class Three extends React.Component {
   scene: THREE.Scene = new THREE.Scene();
   renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({
     antialias: true
   });
+  rendererMount!: HTMLDivElement;
 
   camera: THREE.Camera = new THREE.Camera();
   clock: THREE.Clock = new THREE.Clock();
 
   mixer!: THREE.AnimationMixer;
 
-  mount!: HTMLDivElement;
+  stats = new Stats();
+  statsMount!: HTMLDivElement;
 
   async componentDidMount() {
-    this.mount.appendChild(this.renderer.domElement);
+    this.rendererMount.appendChild(this.renderer.domElement);
 
     this.onWindowResize();
     window.addEventListener("resize", this.onWindowResize.bind(this));
+
+    this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+    this.statsMount.appendChild(this.stats.dom);
 
     const assetLoader = new CEAssetLoader("assets/Quarterback Pass.ceasset");
     const asset = await assetLoader.load();
     this.addMeshesToScene(asset.meshes);
     this.addSkeletonHelperToScene(asset.skeleton);
-
-    this.playAnimation(asset, 0);
+    this.playAnimation(asset, 1);
 
     this.animate();
   }
@@ -69,21 +74,34 @@ class Three extends React.Component {
   animate() {
     requestAnimationFrame(this.animate.bind(this));
 
+    this.stats.begin();
+
     const deltaTime = this.clock.getDelta();
     this.mixer.update(deltaTime * this.mixer.timeScale);
 
     this.renderer.render(this.scene, this.camera);
+
+    this.stats.end();
   }
 
   render() {
     return (
-      <div
-        ref={ref => {
-          if (ref != null) {
-            this.mount = ref;
-          }
-        }}
-      />
+      <>
+        <div
+          ref={ref => {
+            if (ref != null) {
+              this.statsMount = ref;
+            }
+          }}
+        />
+        <div
+          ref={ref => {
+            if (ref != null) {
+              this.rendererMount = ref;
+            }
+          }}
+        />
+      </>
     );
   }
 }
