@@ -4,15 +4,14 @@ import CEAssetType from "../data/asset/CEAssetType";
 import CEAssetDeserializer from "../deserializer/CEAssetDeserializer";
 
 class CEAssetImporter {
-  fileName: string;
+  private readonly buffer: ArrayBuffer;
 
-  constructor(fileName: string) {
-    this.fileName = fileName;
+  constructor(buffer: ArrayBuffer) {
+    this.buffer = buffer;
   }
 
-  async import(): Promise<CEAsset> {
-    const buffer = await this.fetchFile();
-    const bufferStream = new BufferStream(buffer, true);
+  import(): CEAsset {
+    const bufferStream = new BufferStream(this.buffer, true);
     const assetDeserializer = new CEAssetDeserializer(bufferStream);
 
     if (!assetDeserializer.readAndVerifyHeader()) {
@@ -56,11 +55,6 @@ class CEAssetImporter {
     }
 
     return asset;
-  }
-
-  private async fetchFile(): Promise<ArrayBuffer> {
-    const response = await fetch(this.fileName);
-    return response.arrayBuffer();
   }
 }
 
