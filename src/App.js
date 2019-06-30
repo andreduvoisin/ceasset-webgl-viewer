@@ -1,6 +1,6 @@
 import React from "react";
 import "./App.css";
-import ThreeCanvas from "./three/ThreeCanvas";
+import ThreeCanvas from "./ThreeCanvas";
 
 function App() {
   return (

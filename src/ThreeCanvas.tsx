@@ -3,6 +3,7 @@ import * as THREE from "three";
 import CEAssetLoader from "./CEAssetLoader";
 import ThreeAsset from "./ThreeAsset";
 import Stats from "stats.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 class Three extends React.Component {
   scene: THREE.Scene = new THREE.Scene();
@@ -13,6 +14,7 @@ class Three extends React.Component {
 
   camera: THREE.Camera = new THREE.Camera();
   clock: THREE.Clock = new THREE.Clock();
+  controls!: OrbitControls;
 
   mixer!: THREE.AnimationMixer;
 
@@ -31,7 +33,7 @@ class Three extends React.Component {
     const assetLoader = new CEAssetLoader("assets/Quarterback Pass.ceasset");
     const asset = await assetLoader.load();
     this.addMeshesToScene(asset.meshes);
-    this.playAnimation(asset, 1);
+    this.playAnimation(asset, 0);
 
     this.addSkeletonHelperToScene(asset.skeleton);
     this.addGridHelperToScene();
@@ -40,18 +42,20 @@ class Three extends React.Component {
   }
 
   onWindowResize() {
+    this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
 
     this.camera = new THREE.PerspectiveCamera(
       75,
       window.innerWidth / window.innerHeight,
       0.1,
-      1000
+      2000
     );
+    this.camera.position.set(0, 100, 300);
 
-    this.camera.position.x = 0;
-    this.camera.position.y = 100;
-    this.camera.position.z = 500;
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.target.set(0, 100, 0);
+    this.controls.update();
   }
 
   addMeshesToScene(meshes: THREE.SkinnedMesh[]) {

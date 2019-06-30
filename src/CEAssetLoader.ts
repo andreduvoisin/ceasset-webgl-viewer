@@ -1,11 +1,11 @@
-import CEAssetImporter from "../ceasset/importer/CEAssetImporter";
+import CEAssetImporter from "./ceasset/importer/CEAssetImporter";
 import ThreeAsset from "./ThreeAsset";
 import * as THREE from "three";
 import { BufferGeometry, SkinnedMesh } from "three";
-import CEMesh from "../ceasset/data/mesh/CEMesh";
-import CETexture from "../ceasset/data/texture/CETexture";
-import CESkeleton from "../ceasset/data/skeleton/CESkeleton";
-import CEAnimation from "../ceasset/data/animation/CEAnimation";
+import CEMesh from "./ceasset/data/mesh/CEMesh";
+import CETexture from "./ceasset/data/texture/CETexture";
+import CESkeleton from "./ceasset/data/skeleton/CESkeleton";
+import CEAnimation from "./ceasset/data/animation/CEAnimation";
 
 // TODO: Figure out the three.js Loader paradigm and implement.
 class CEAssetLoader {
