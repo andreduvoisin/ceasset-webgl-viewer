@@ -25,7 +25,7 @@ class Three extends React.Component {
     this.onWindowResize();
     window.addEventListener("resize", this.onWindowResize.bind(this));
 
-    this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+    this.stats.showPanel(0);
     this.statsMount.appendChild(this.stats.dom);
 
     const assetLoader = new CEAssetLoader("assets/Quarterback Pass.ceasset");
