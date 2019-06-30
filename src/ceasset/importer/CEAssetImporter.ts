@@ -1,439 +1,62 @@
 import CEAsset from "../data/CEAsset";
-import * as THREE from "three";
+import BufferStream from "../../BufferStream";
+import CEAssetType from "../data/CEAssetType";
+import CEAssetDeserializer from "../deserializer/CEAssetDeserializer";
 
 class CEAssetImporter {
   fileName: string;
-  littleEndian: boolean;
 
   constructor(fileName: string) {
     this.fileName = fileName;
-    this.littleEndian = true;
   }
 
-  import(): CEAsset {
-    const asset = new CEAsset();
-    return asset;
-  }
+  async import(): Promise<CEAsset> {
+    const buffer = await this.fetchFile();
+    const bufferStream = new BufferStream(buffer, true);
+    const assetDeserializer = new CEAssetDeserializer(bufferStream);
 
-  async readFile() {
-    const buffer = await fetch(this.fileName)
-      .then(result => result.arrayBuffer());
-
-    const dataView = new DataView(buffer);
-
-    if (!this.checkHeader(dataView)) {
-      console.error("ceasset: bad header");
-      return;
+    if (!assetDeserializer.readAndVerifyHeader()) {
+      throw new Error("ceasset: bad header");
     }
 
-    let byteOffset = 8;
+    const asset = new CEAsset();
 
-    while (byteOffset < dataView.byteLength) {
-      const assetType = dataView.getInt32(byteOffset, this.littleEndian);
-      byteOffset += 4;
-
-      let char = 0;
+    while (bufferStream.hasData()) {
+      const assetType = assetDeserializer.readAssetType();
 
       switch (assetType) {
-        // skeleton
-        case 0:
-          const bones: THREE.Bone[] = [];
-          const boneInverses: THREE.Matrix4[] = [];
-
-          // unsigned jointCount;
-          const jointCount = dataView.getUint32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-
-          for (let jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
-            // glm::mat4 inverseBindPose;
-            const elements: number[] = [];
-            for (let i = 0; i < 16; ++i) {
-              elements.push(dataView.getFloat32(byteOffset, this.littleEndian));
-              byteOffset += 4;
-            }
-            const inverseBindPose = new THREE.Matrix4();
-            inverseBindPose.elements = elements;
-            boneInverses.push(inverseBindPose);
-
-            // std::string name;
-            char = dataView.getInt8(byteOffset);
-            ++byteOffset;
-            while (char !== "\0".charCodeAt(0)) {
-              char = dataView.getInt8(byteOffset);
-              ++byteOffset;
-            }
-
-            // short parentIndex;
-            const parentIndex = dataView.getInt16(byteOffset, this.littleEndian);
-            byteOffset += 2;
-
-            const bone = new THREE.Bone();
-            if (parentIndex !== -1) {
-              bones[parentIndex].add(bone);
-            }
-            bones.push(bone);
-          }
-
-          this.skeleton = new THREE.Skeleton(bones, boneInverses);
-
+        case CEAssetType.SKELETON:
+          asset.skeleton = assetDeserializer.readSkeleton();
           break;
 
-        // mesh
-        case 1:
-          // unsigned verticesCount;
-          const verticesCount = dataView.getUint32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-
-          // std::vector<Vertex1P1UV4J> m_vertices;
-          const vertices = new Float32Array(verticesCount * 3);
-          const uvs = new Float32Array(verticesCount * 2);
-          const skinIndices = new Uint8Array(verticesCount * 4);
-          const skinWeights = new Float32Array(verticesCount * 4);
-
-          for (
-            let vertexIndex = 0;
-            vertexIndex < verticesCount;
-            ++vertexIndex
-          ) {
-            // glm::vec3 position;
-            const x = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-            const y = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-            const z = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-
-            const vertexStride = vertexIndex * 3;
-            vertices[vertexStride] = x;
-            vertices[vertexStride + 1] = y;
-            vertices[vertexStride + 2] = z;
-
-            // float uv[2];
-            const u = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-            const v = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-
-            const uvsStride = vertexIndex * 2;
-            uvs[uvsStride] = u;
-            uvs[uvsStride + 1] = v;
-
-            // uint8_t jointIndices[4];
-            const jointIndex0 = dataView.getInt8(byteOffset);
-            byteOffset += 1;
-            const jointIndex1 = dataView.getInt8(byteOffset);
-            byteOffset += 1;
-            const jointIndex2 = dataView.getInt8(byteOffset);
-            byteOffset += 1;
-            const jointIndex3 = dataView.getInt8(byteOffset);
-            byteOffset += 1;
-
-            const skinIndexStride = vertexIndex * 4;
-            skinIndices[skinIndexStride] = jointIndex0;
-            skinIndices[skinIndexStride + 1] = jointIndex1;
-            skinIndices[skinIndexStride + 2] = jointIndex2;
-            skinIndices[skinIndexStride + 3] = jointIndex3;
-
-            // float jointWeights[3];
-            const jointWeight0 = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-            const jointWeight1 = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-            const jointWeight2 = dataView.getFloat32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-
-            const jointWeight3 =
-              1.0 - (jointWeight0 + jointWeight1 + jointWeight2);
-
-            const skinWeightStride = vertexIndex * 4;
-            skinWeights[skinWeightStride] = jointWeight0;
-            skinWeights[skinWeightStride + 1] = jointWeight1;
-            skinWeights[skinWeightStride + 2] = jointWeight2;
-            skinWeights[skinWeightStride + 3] = jointWeight3;
+        case CEAssetType.MESH:
+          const mesh = assetDeserializer.readMesh();
+          if (asset.meshes === undefined) {
+            asset.meshes = [];
           }
-
-          this.geometry.addAttribute(
-            "position",
-            new THREE.BufferAttribute(vertices, 3)
-          );
-          this.geometry.addAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-          this.geometry.addAttribute(
-            "skinIndex",
-            new THREE.BufferAttribute(skinIndices, 4)
-          );
-          this.geometry.addAttribute(
-            "skinWeight",
-            new THREE.BufferAttribute(skinWeights, 4)
-          );
-
-          // unsigned indicesCount;
-          const indicesCount = dataView.getUint32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-
-          // std::vector<unsigned int> m_indices;
-          // TODO: Use BufferAttribute instead for efficiency.
-          const indices: number[] = [];
-          for (let indexIndex = 0; indexIndex < indicesCount; indexIndex += 3) {
-            const a = dataView.getUint32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-            const b = dataView.getUint32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-            const c = dataView.getUint32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-
-            indices.push(a, b, c);
-          }
-          this.geometry.setIndex(indices);
-
-          // std::string m_diffuseMapName;
-          char = dataView.getInt8(byteOffset);
-          ++byteOffset;
-          while (char !== "\0".charCodeAt(0)) {
-            char = dataView.getInt8(byteOffset);
-            ++byteOffset;
-          }
-
-          // std::string m_specularMapName;
-          char = dataView.getInt8(byteOffset);
-          ++byteOffset;
-          while (char !== "\0".charCodeAt(0)) {
-            char = dataView.getInt8(byteOffset);
-            ++byteOffset;
-          }
-
-          // std::string m_normalMapName;
-          char = dataView.getInt8(byteOffset);
-          ++byteOffset;
-          while (char !== "\0".charCodeAt(0)) {
-            char = dataView.getInt8(byteOffset);
-            ++byteOffset;
-          }
-
-          // uint8_t m_diffuseIndex;
-          dataView.getInt8(byteOffset);
-          ++byteOffset;
-
-          // uint8_t m_specularIndex;
-          dataView.getInt8(byteOffset);
-          ++byteOffset;
-
-          // uint8_t m_normalIndex;
-          dataView.getInt8(byteOffset);
-          ++byteOffset;
-
+          asset.meshes.push(mesh);
           break;
 
-        // animation
-        case 2:
-          // std::string name;
-          char = dataView.getInt8(byteOffset);
-          ++byteOffset;
-          while (char !== "\0".charCodeAt(0)) {
-            char = dataView.getInt8(byteOffset);
-            ++byteOffset;
+        case CEAssetType.ANIMATION:
+          const animation = assetDeserializer.readAnimation();
+          if (asset.animations === undefined) {
+            asset.animations = [];
           }
-          // TODO: Properly parse the name.
-          // animation.name = name;
-
-          const keyframeTracks: THREE.KeyframeTrack[] = [];
-
-          // std::vector<std::vector<TranslationKey>> translations;
-          // unsigned componentsCount;
-          let componentsCount = dataView.getUint32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-          for (
-            let componentsIndex = 0;
-            componentsIndex < componentsCount;
-            ++componentsIndex
-          ) {
-            let times: number[] = [];
-            let values: number[] = [];
-
-            // unsigned keyCount;
-            const keyCount = dataView.getUint32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-
-            for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
-              // glm::vec3 translation;
-              const x = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-              const y = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-              const z = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-
-              values.push(x, y, z);
-
-              // float time;
-              const time = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-
-              times.push(time);
-            }
-
-            const translationTrack = new THREE.VectorKeyframeTrack(
-              `${this.skeleton.bones[componentsIndex].uuid}.position`,
-              times,
-              values,
-              THREE.InterpolateLinear
-            );
-            keyframeTracks.push(translationTrack);
-          }
-
-          // std::vector<std::vector<RotationKey>> rotations;
-          // unsigned componentsCount;
-          componentsCount = dataView.getUint32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-          for (
-            let componentsIndex = 0;
-            componentsIndex < componentsCount;
-            ++componentsIndex
-          ) {
-            let times: number[] = [];
-            let values: number[] = [];
-
-            // unsigned keyCount;
-            const keyCount = dataView.getUint32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-
-            for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
-              // glm::quat rotation;
-              const x = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-              const y = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-              const z = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-              const w = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-
-              values.push(x, y, z, w);
-
-              // float time;
-              const time = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-
-              times.push(time);
-            }
-
-            const rotationTrack = new THREE.QuaternionKeyframeTrack(
-              `${this.skeleton.bones[componentsIndex].uuid}.quaternion`,
-              times,
-              values,
-              THREE.InterpolateLinear
-            );
-            keyframeTracks.push(rotationTrack);
-          }
-
-          // std::vector<std::vector<ScaleKey>> scales;
-          // unsigned componentsCount;
-          componentsCount = dataView.getUint32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-          for (
-            let componentsIndex = 0;
-            componentsIndex < componentsCount;
-            ++componentsIndex
-          ) {
-            let times: number[] = [];
-            let values: number[] = [];
-
-            // unsigned keyCount;
-            const keyCount = dataView.getUint32(byteOffset, this.littleEndian);
-            byteOffset += 4;
-
-            for (let keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
-              // glm::vec3 scale;
-              const x = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-              const y = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-              const z = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-
-              values.push(x, y, z);
-
-              // float time;
-              const time = dataView.getFloat32(byteOffset, this.littleEndian);
-              byteOffset += 4;
-
-              times.push(time);
-            }
-
-            const scaleTrack = new THREE.VectorKeyframeTrack(
-              `${this.skeleton.bones[componentsIndex].uuid}.scale`,
-              times,
-              values,
-              THREE.InterpolateLinear
-            );
-            keyframeTracks.push(scaleTrack);
-          }
-
-          // float duration;
-          const duration = dataView.getFloat32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-
-          const animation = new THREE.AnimationClip(
-            "anim",
-            duration,
-            keyframeTracks
-          );
-          this.animations.push(animation);
-
+          asset.animations.push(animation);
           break;
 
-        // texture
-        case 3:
-          // int width;
-          const width = dataView.getInt32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-          // int height;
-          const height = dataView.getInt32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-          // int channels;
-          const channels = dataView.getInt32(byteOffset, this.littleEndian);
-          byteOffset += 4;
-
-          // std::vector<std::byte> data;
-          const size = width * height * channels;
-          const data = new Uint8Array(size);
-          for (let i = 0; i < size; ++i) {
-            data[i] = dataView.getUint8(byteOffset);
-            ++byteOffset;
-          }
-
-          const texture = new THREE.DataTexture(
-            data,
-            width,
-            height,
-            channels === 3 ? THREE.RGBFormat : THREE.RGBAFormat
-          );
-          // texture.wrapS = THREE.RepeatWrapping;
-          // texture.wrapT = THREE.RepeatWrapping;
-          // texture.minFilter = THREE.LinearMipMapLinearFilter; // TODO: This filter breaks WebGL.
-          // texture.magFilter = THREE.LinearFilter;
-          texture.needsUpdate = true;
-
-          this.material = new THREE.MeshBasicMaterial({
-            map: texture,
-            skinning: true
-          });
-
+        case CEAssetType.TEXTURE:
+          asset.texture = assetDeserializer.readTexture();
           break;
       }
     }
+
+    return asset;
   }
 
-  checkHeader(dataView: DataView): boolean {
-    return (
-      dataView.getInt8(0) === "C".charCodeAt(0) &&
-      dataView.getInt8(1) === "E".charCodeAt(0) &&
-      dataView.getInt8(2) === "A".charCodeAt(0) &&
-      dataView.getInt8(3) === "S".charCodeAt(0) &&
-      dataView.getInt8(4) === "S".charCodeAt(0) &&
-      dataView.getInt8(5) === "E".charCodeAt(0) &&
-      dataView.getInt8(6) === "T".charCodeAt(0) &&
-      dataView.getInt8(7) === "\0".charCodeAt(0)
-    );
+  private async fetchFile(): Promise<ArrayBuffer> {
+    const response = await fetch(this.fileName);
+    return response.arrayBuffer();
   }
 }
 

@@ -1,6 +1,7 @@
 import React from "react";
 import * as THREE from "three";
 import BufferStream from "./BufferStream";
+import CEAssetImporter from "./ceasset/importer/CEAssetImporter";
 
 class Three extends React.Component {
   scene: THREE.Scene = new THREE.Scene();
@@ -47,6 +48,12 @@ class Three extends React.Component {
     const buffer = await fetch("assets/Quarterback Pass.ceasset").then(result =>
       result.arrayBuffer()
     );
+
+    const assetImporter = new CEAssetImporter(
+      "assets/Quarterback Pass.ceasset"
+    );
+    const asset = assetImporter.import();
+    console.log(asset);
 
     const bufferStream = new BufferStream(buffer, true);
 
