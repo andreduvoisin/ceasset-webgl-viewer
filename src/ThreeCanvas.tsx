@@ -27,23 +27,26 @@ class Three extends React.Component {
   modelNames = ["Quarterback Pass", "Thriller Part 2", "Zombie Stand Up"];
   previousModel = this.modelNames[1];
   animationIndex = 0;
+  animationController!: dat.GUIController;
   params = {
     enableMesh: true,
     enableSkeleton: false,
-    model: this.previousModel
+    model: this.previousModel,
+    animation: ""
   };
 
   stats!: Stats;
   statsMount!: HTMLDivElement;
 
   async componentDidMount() {
+    await this.loadAllAssets();
+
     this.initializeRenderer();
     this.initializeCamera();
     this.initializeOrbitControls();
     this.initializeGui();
     this.initializeStats();
 
-    await this.loadAllAssets();
     this.addMeshesToScene();
     this.playAnimation(this.animationIndex);
 
@@ -98,6 +101,12 @@ class Three extends React.Component {
     this.gui
       .add(this.params, "model", this.modelNames)
       .onFinishChange(this.changeModel.bind(this));
+
+    const animationNames = this.getAnimationNames();
+    this.params.animation = animationNames[0];
+    this.animationController = this.gui
+      .add(this.params, "animation", animationNames)
+      .onFinishChange(this.changeAnimation.bind(this));
   }
 
   enableMesh(enabled: boolean) {
@@ -116,6 +125,8 @@ class Three extends React.Component {
 
     this.stopAnimation(this.animationIndex);
     this.resetAnimation(this.animationIndex);
+
+    this.animationIndex = 0;
     this.playAnimation(this.animationIndex);
 
     for (const [name, asset] of Object.entries(this.assets)) {
@@ -125,7 +136,27 @@ class Three extends React.Component {
       });
     }
 
+    this.gui.remove(this.animationController);
+    const animationNames = this.getAnimationNames();
+    this.params.animation = animationNames[0];
+    this.animationController = this.gui
+      .add(this.params, "animation", animationNames)
+      .onFinishChange(this.changeAnimation.bind(this));
+
     this.previousModel = newModelName;
+  }
+
+  changeAnimation(newAnimationName: string) {
+    this.stopAnimation(this.animationIndex);
+    this.resetAnimation(this.animationIndex);
+
+    this.assets[this.params.model].animations.forEach((animation, index) => {
+      if (animation.name == newAnimationName) {
+        this.animationIndex = index;
+      }
+    });
+
+    this.playAnimation(this.animationIndex);
   }
 
   initializeStats() {
@@ -186,6 +217,12 @@ class Three extends React.Component {
       this.assets[this.previousModel].animations[animationIndex]
     );
     action.reset();
+  }
+
+  getAnimationNames(): string[] {
+    return this.assets[this.params.model].animations.map(animation => {
+      return animation.name;
+    });
   }
 
   addSkeletonHelperToScene() {
