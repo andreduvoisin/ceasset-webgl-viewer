@@ -121,19 +121,19 @@ class CEAssetLoader {
           vertex.jointWeights[2]);
     }
 
-    geometry.addAttribute(
+    geometry.setAttribute(
       "position",
       new THREE.BufferAttribute(positions, positionStride)
     );
 
-    geometry.addAttribute("uv", new THREE.BufferAttribute(uvs, uvStride));
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, uvStride));
 
-    geometry.addAttribute(
+    geometry.setAttribute(
       "skinIndex",
       new THREE.BufferAttribute(skinIndices, skinIndicesStride)
     );
 
-    geometry.addAttribute(
+    geometry.setAttribute(
       "skinWeight",
       new THREE.BufferAttribute(skinWeights, skinWeightsStride)
     );
