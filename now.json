@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "name": "ceasset-webgl-viewer",
-  "alias": "webgl.andreduvoisin.com",
   "builds": [
     {
       "src": "package.json",
