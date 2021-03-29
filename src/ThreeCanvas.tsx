@@ -151,7 +151,7 @@ class Three extends React.Component {
     this.resetAnimation(this.animationIndex);
 
     this.assets[this.params.model].animations.forEach((animation, index) => {
-      if (animation.name == newAnimationName) {
+      if (animation.name === newAnimationName) {
         this.animationIndex = index;
       }
     });
